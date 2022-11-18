@@ -17,14 +17,43 @@ def get_midi_filepaths():
 
 
 
-def make_note_num_dicts():
+def make_note_num_dicts(seen_notes):
   '''
   Make a dictionairy in the form kinda like {A1:0 , B1:.01 , C1:.02 ....... F5:1}
+  and another one with the key and 
   '''
-
-
-
-
+  ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7','A8',
+   'B-1', 'B-2', 'B-3', 'B-4', 'B-5', 'B-6',
+    'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7','B8',
+    'C#2', 'C#3', 'C#4', 'C#5', 'C#6', 'C#7', 
+    'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 
+    'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 
+     'E-1','E-2', 'E-3', 'E-4', 'E-5', 'E-6',
+     'E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 
+     'F#1', 'F#2', 'F#3', 'F#4', 'F#5', 'F#6', 
+     'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 
+     'G#2', 'G#3', 'G#4', 'G#5', 'G#6', 
+     'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7']
+    
+  #C-C C# D D# E- E F F# G G# A- A A# B- B B#
+  notes = ['C-','C', 'C#', 'D-','D','D#', 'E-', 'E','E#','F-' 'F', 'F#' ,'G','G#' ,'A-', 'A', 'A#' ,'B-' 'B', 'B#']
+  
+  octaves = 8
+  pitch_to_num_dict = {}
+  i = 0
+  for octave in range(1,octaves+1):
+    for note in note:
+      for note_type in ["" , "-","#"]:
+        if note + note_type + octave + note in seen_notes:
+          continue
+        else:
+          pitch_to_num_dict[note + note_type + octave + note] = i
+          i += 1
+  #normalize the pitchs
+  for key in list(pitch_to_num_dict.keys()):
+    pitch_to_num_dict[key] /= len(list(pitch_to_num_dict.keys()))
+  num_to_pitch = dict(zip( pitch_to_num_dict.values(), pitch_to_num_dict.keys()))
+  return pitch_to_num_dict
 def normalize_notes(songs):
   global n_pitch
   global n_gaps
