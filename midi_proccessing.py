@@ -55,6 +55,7 @@ def make_note_num_dicts(seen_notes):
   num_to_pitch = dict(zip( pitch_to_num_dict.values(), pitch_to_num_dict.keys()))
   return pitch_to_num_dict ,  num_to_pitch
 def normalize_notes(songs):
+  #THIS FUNCTION NEEDS WORK
   global n_gaps
   global n_lengths
   global n_volume
@@ -77,7 +78,7 @@ def normalize_notes(songs):
   total_chords = 0
   unique_pitchs = sorted(set(item for item in combined_pitchs))
 
-
+  
 
   pitch_to_num , num_to_pitch = make_note_num_dicts(seen_notes=unique_pitchs)
   n_gaps = float(len(set(combined_gaps)))

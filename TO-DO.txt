@@ -1,0 +1,5 @@
+
+a) fix normalize_notes function
+b) add bunch of visualiztions of data
+c) do some matrix profiling and add visuilization https://matrixprofile.org/libraries/
+d) finish funnctions that transform our output sequernces into music 

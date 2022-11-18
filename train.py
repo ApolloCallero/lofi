@@ -20,33 +20,63 @@ from midi_proccessing import *
 
 
 def lstm(network_input , network_output):
-  model = Sequential()
-  model.add(LSTM(64, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=True))
-  model.add(Dropout(0.2))
-  model.add(LSTM(32, return_sequences=True))
-  model.add(Dropout(0.2))
-  model.add(LSTM(32, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=False))
-  model.add(Dropout(0.2))
-  model.add(Dense(4))
-  model.add(Activation('softmax'))
-  model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
-  model.fit(network_input, network_output, epochs=10)#, batch_size=64)
-  return model
+    print('input shap: ' , network_input.shape)
+    print('output shape: ' , network_output.shape)
+    model = Sequential()
+    model.add(LSTM(512, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(1064, return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(1064, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=False))
+    model.add(Dropout(0.2))
+    model.add(Dense(4))
+    model.add(Activation('softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+    model.fit(network_input, network_output, epochs=3)#, batch_size=64)
+    return model
+
+def lstm2(network_input , network_output):
+    print('input shap: ' , network_input.shape)
+    print('output shape: ' , network_output.shape)
+    model = Sequential()
+    model.add(LSTM(128, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(64, return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(128, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(64, return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(128, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(64, return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(128, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(64, return_sequences=False))
+    model.add(Dropout(0.2))
+
+
+    model.add(Dense(4))
+    model.add(Activation('softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+    model.fit(network_input, network_output, epochs=8)#, batch_size=64)
+    return model
 
 def predict_notes(network_input , model):
     #pick the first n notes from a random song generate the next note and add it to the prev notes to pull data from
     start_notes = np.random.randint(0, len(network_input)-1)
     #int_to_note = dict((number, note) for number, note in enumerate(pitchnames))
-    start = 20
-    num_prev_notes = 20
+    start = 10
+    num_prev_notes = 10
     prev_notes = network_input[start_notes]
-    print("initial input for lstm predictions:  " , prev_notes)
+    #print("initial input for lstm predictions:  " , prev_notes)
     prediction_output = []
 
 
     for note_index in range(100): #here, we're generating 100 notes
 
-        prediction_input = np.reshape(prev_notes[start - num_prev_notes:start], (1, 20, 4))
+        prediction_input = np.reshape(prev_notes[start - num_prev_notes:start], (1, 10, 4))
         prediction = model.predict(prediction_input, verbose = 0)
         prediction_output.append(prediction)
         prev_notes = np.concatenate((prev_notes , prediction) , axis = 0)
@@ -55,8 +85,9 @@ def predict_notes(network_input , model):
 
 
 
-    #[gap from last note , note length , pitch]
-    print(prediction_output)
+    #[gap from last note , note length , pitch , volume]
+    for note in prediction_output:
+        print(note)
     return prediction_output
 files = get_midi_filepaths()
 songs = []
@@ -64,7 +95,7 @@ for midi_path in files:
     songs.append(midi_path_to_data(midi_path))
 
 
-input , output = prepare_song_data_for_model(songs , 20)
+input , output = prepare_song_data_for_model(songs , 10)
 model = lstm(np.array(input) , np.array(output))
 predict_notes(input , model)
 
