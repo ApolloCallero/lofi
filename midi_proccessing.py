@@ -15,15 +15,25 @@ def get_midi_filepaths():
                   midi_paths.append(os.path.join(root, file))
     return midi_paths
 
+
+
+def make_note_num_dicts():
+  '''
+  Make a dictionairy in the form kinda like {A1:0 , B1:.01 , C1:.02 ....... F5:1}
+  '''
+
+
+
+
 def normalize_notes(songs):
   global n_pitch
   global n_gaps
   global n_lengths
-  global n_octave
+  global n_volume
   combined_pitchs = []
   combined_gaps = []
   combined_lengths = []
-  combined_octave = []
+  combined_volume = []
   for song in songs:
       for note in song['pitch']:
           combined_pitchs.append(note)
@@ -31,32 +41,25 @@ def normalize_notes(songs):
         combined_gaps.append(gap)
       for length in song['lengths']:
         combined_lengths.append(length)
-      for octave in song['octave']:
-        combined_octave.append(octave)
+      for volume in song['volume']:
+        combined_volume.append(volume)
   
   # maybe pitch/chords should be held as a category instead of number???
   total_notes = 0
   total_chords = 0
   all_pitch_chords = sorted(set(item for item in combined_pitchs))
   pitchs = []
-  chords = []
   for i in all_pitch_chords:
-    if '.' in i:
-      chords.append(i)
-    else:
       pitchs.append(i)
-  print("# chords: " , len(chords))
   print("# notes: " , len(pitchs))
   pitchs.sort()
-  chords.sort()
-  pitchnames = pitchs + chords
-  for index, num in enumerate(['0', '1', '2', '3', '4', '5', '6', '7', '9','10', '11']):
-    pitchnames[index] = num
+  pitchnames = pitchs
+
   print(pitchnames)
   n_pitch = float(len(set(combined_pitchs)))
   n_gaps = float(len(set(combined_gaps)))
   n_lengths = float(len(set(combined_lengths)))
-  #n_octave = float(len(set(combined_octave)))
+  n_volume = float(len(set(combined_volume)))
 
   note_to_num = dict((note, number / n_pitch) for number, note in enumerate(pitchnames))
   num_to_note = dict((number, note) for number, note in enumerate(pitchnames))
@@ -69,7 +72,7 @@ def normalize_notes(songs):
       song['gaps'][index] /= n_gaps
       song['lengths'][index] /= n_lengths
       song['pitch'][index] = note_to_num[song['pitch'][index]]
-      #song['octave'][index] /= n_octave
+      song['volume'][index] /= n_volume
   return songs , note_to_num , num_to_note
 def midi_path_to_data(midi_path):
     try:
@@ -83,24 +86,24 @@ def midi_path_to_data(midi_path):
     note_gaps = []#1d list of time offsets/'gaps' between notes
     note_lengths = []
     note_pitch = []
-    note_octaves = []
+    note_volume = []
     lastOffset = 0
     for note in midi.flat.notes:
-
         #add pitch for this note
         if isinstance(note, music.note.Note): #if it's a single note, we don't have to join it to any other notes in the series
             note_pitch.append(str(note.pitch))
-        elif isinstance(note, music.chord.Chord): #if it's a chord, we will have to join it to the other notes
-            note_pitch.append('.'.join(str(n) for n in note.normalOrder)) 
-
-        #if first note in song
+        elif isinstance(note, music.chord.Chord): #split each note in a chord and have them be it's on 'step' in the time series just with no time between them
+            for note_in_chord in note.notes:
+              note_pitch.append(str(note_in_chord.pitch))
+              note_gaps.append(0)
+              note_lengths.append(note_in_chord.quarterLength)
+              note_volume.append(note_in_chord.volume.velocity)
+            continue
+        
         if note_gaps == []:
             note_gaps = [0]
             note_lengths.append(float(note.quarterLength))
-            if isinstance(note, music.chord.Chord):
-              note_octaves.append(4)
-            else:
-              note_octaves.append(note.pitch.octave)
+            note_volume.append(note.volume.velocity)
             continue
     
         #offset/gap from start
@@ -112,17 +115,14 @@ def midi_path_to_data(midi_path):
         lastOffset = totalOffset
 
         #add 'note length'
-
         note_lengths.append(float(note.quarterLength))
         
-        #add note octave
-        if isinstance(note, music.chord.Chord):
-            note_octaves.append(4)
-        else:
-            note_octaves.append(note.pitch.octave)
+        #add note volume
+        note_volume.append(note.volume.velocity)
 
 
-    return {'gaps':note_gaps , 'lengths':note_lengths , 'pitch':note_pitch , 'octave':note_octaves}
+
+    return {'gaps':note_gaps , 'lengths':note_lengths , 'pitch':note_pitch , 'volume':note_volume}
 def prepare_song_data_for_model(songs , num_prev_notes):
 
   global note_to_int
@@ -140,13 +140,13 @@ def prepare_song_data_for_model(songs , num_prev_notes):
         prev_gaps = song['gaps'][note_num - num_prev_notes:note_num]
         prev_lengths = song['lengths'][note_num - num_prev_notes:note_num]
         prev_pitch = song['pitch'][note_num - num_prev_notes:note_num]
-        #prev_octave = song['octave'][note_num - num_prev_notes:note_num]
+        prev_volume = song['volume'][note_num - num_prev_notes:note_num]
 
         #normalize input
-        step_input = list(zip(prev_gaps , prev_lengths , prev_pitch))
+        step_input = list(zip(prev_gaps , prev_lengths , prev_pitch , prev_volume))
 
-        #output is [gap from last note , note length , pitch , octave]
-        curr_note_data = [song['gaps'][note_num], song['lengths'][note_num], song['pitch'][note_num]]
+        #output is [gap from last note , note length , pitch , velocity]
+        curr_note_data = [song['gaps'][note_num], song['lengths'][note_num], song['pitch'][note_num] , song['pitch'][note_num]]
 
 
         network_input.append(step_input)
@@ -162,5 +162,4 @@ def list_instruments(midi):
     for n in midi.flat.notes:
         if type(n) != music.chord.Chord:
           print("Note: %s %d %0.1f" % (n.pitch.name, n.pitch.octave, n.duration.quarterLength))
-
 
