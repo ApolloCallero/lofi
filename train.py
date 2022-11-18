@@ -21,16 +21,16 @@ from midi_proccessing import *
 
 def lstm(network_input , network_output):
   model = Sequential()
-  model.add(LSTM(128, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=True))
+  model.add(LSTM(64, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=True))
   model.add(Dropout(0.2))
-  model.add(LSTM(256, return_sequences=True))
+  model.add(LSTM(32, return_sequences=True))
   model.add(Dropout(0.2))
-  model.add(LSTM(64, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=False))
+  model.add(LSTM(32, input_shape=(network_input.shape[1], network_input.shape[2]), return_sequences=False))
   model.add(Dropout(0.2))
   model.add(Dense(4))
   model.add(Activation('softmax'))
   model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
-  model.fit(network_input, network_output, epochs=2)#, batch_size=64)
+  model.fit(network_input, network_output, epochs=10)#, batch_size=64)
   return model
 
 def predict_notes(network_input , model):

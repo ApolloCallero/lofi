@@ -36,26 +36,25 @@ def make_note_num_dicts(seen_notes):
      'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7']
     
   #C-C C# D D# E- E F F# G G# A- A A# B- B B#
-  notes = ['C-','C', 'C#', 'D-','D','D#', 'E-', 'E','E#','F-' 'F', 'F#' ,'G','G#' ,'A-', 'A', 'A#' ,'B-' 'B', 'B#']
-  
+  #notes = ['C-','C', 'C#', 'D-','D','D#', 'E-', 'E','E#','F-' 'F', 'F#' ,'G','G#' ,'A-', 'A', 'A#' ,'B-' 'B', 'B#']
+  notes = ["C" , "D" , "E" , "F" , "G" , "A","B"]
   octaves = 8
   pitch_to_num_dict = {}
   i = 0
   for octave in range(1,octaves+1):
-    for note in note:
-      for note_type in ["" , "-","#"]:
-        if note + note_type + octave + note in seen_notes:
+    for note in notes:
+      for note_type in ["-" , "","#"]:
+        if note + note_type + str(octave) not in seen_notes:
           continue
         else:
-          pitch_to_num_dict[note + note_type + octave + note] = i
+          pitch_to_num_dict[note + note_type + str(octave)] = i
           i += 1
   #normalize the pitchs
   for key in list(pitch_to_num_dict.keys()):
     pitch_to_num_dict[key] /= len(list(pitch_to_num_dict.keys()))
   num_to_pitch = dict(zip( pitch_to_num_dict.values(), pitch_to_num_dict.keys()))
-  return pitch_to_num_dict
+  return pitch_to_num_dict ,  num_to_pitch
 def normalize_notes(songs):
-  global n_pitch
   global n_gaps
   global n_lengths
   global n_volume
@@ -76,33 +75,26 @@ def normalize_notes(songs):
   # maybe pitch/chords should be held as a category instead of number???
   total_notes = 0
   total_chords = 0
-  all_pitch_chords = sorted(set(item for item in combined_pitchs))
-  pitchs = []
-  for i in all_pitch_chords:
-      pitchs.append(i)
-  print("# notes: " , len(pitchs))
-  pitchs.sort()
-  pitchnames = pitchs
+  unique_pitchs = sorted(set(item for item in combined_pitchs))
 
-  print(pitchnames)
-  n_pitch = float(len(set(combined_pitchs)))
+
+
+  pitch_to_num , num_to_pitch = make_note_num_dicts(seen_notes=unique_pitchs)
   n_gaps = float(len(set(combined_gaps)))
   n_lengths = float(len(set(combined_lengths)))
   n_volume = float(len(set(combined_volume)))
 
-  note_to_num = dict((note, number / n_pitch) for number, note in enumerate(pitchnames))
-  num_to_note = dict((number, note) for number, note in enumerate(pitchnames))
 
-  #normalize notes HERE
+  #normalize notes here
   songs_normailized_notes = []# 2d list of songs and dict notes in the song
   for song in songs:
     notes_in_song = {'gaps':[],'lengths':[] , 'pitch':[],'octave':[]}
     for index in range(0,len(song['gaps'])):
       song['gaps'][index] /= n_gaps
       song['lengths'][index] /= n_lengths
-      song['pitch'][index] = note_to_num[song['pitch'][index]]
+      song['pitch'][index] = pitch_to_num[song['pitch'][index]]#match the pitch lettter to a normalized number
       song['volume'][index] /= n_volume
-  return songs , note_to_num , num_to_note
+  return songs , pitch_to_num , num_to_pitch
 def midi_path_to_data(midi_path):
     try:
       midi = music.converter.parse(midi_path)
