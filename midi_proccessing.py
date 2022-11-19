@@ -1,6 +1,7 @@
 
 import music21 as music
 import os
+
 def get_midi_filepaths():
     lofi_paths = ['data']
     midi_paths = []
@@ -21,22 +22,8 @@ def make_note_num_dicts(seen_notes):
   '''
   Make a dictionairy in the form kinda like {A1:0 , B1:.01 , C1:.02 ....... F5:1}
   and another one with the key and 
-  '''
-  ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7','A8',
-   'B-1', 'B-2', 'B-3', 'B-4', 'B-5', 'B-6',
-    'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7','B8',
-    'C#2', 'C#3', 'C#4', 'C#5', 'C#6', 'C#7', 
-    'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 
-    'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 
-     'E-1','E-2', 'E-3', 'E-4', 'E-5', 'E-6',
-     'E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 
-     'F#1', 'F#2', 'F#3', 'F#4', 'F#5', 'F#6', 
-     'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 
-     'G#2', 'G#3', 'G#4', 'G#5', 'G#6', 
-     'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7']
-    
-  #C-C C# D D# E- E F F# G G# A- A A# B- B B#
-  #notes = ['C-','C', 'C#', 'D-','D','D#', 'E-', 'E','E#','F-' 'F', 'F#' ,'G','G#' ,'A-', 'A', 'A#' ,'B-' 'B', 'B#']
+  '''    
+
   notes = ["C" , "D" , "E" , "F" , "G" , "A","B"]
   octaves = 8
   pitch_to_num_dict = {}
@@ -44,9 +31,6 @@ def make_note_num_dicts(seen_notes):
   for octave in range(1,octaves+1):
     for note in notes:
       for note_type in ["-" , "","#"]:
-        if note + note_type + str(octave) not in seen_notes:
-          continue
-        else:
           pitch_to_num_dict[note + note_type + str(octave)] = i
           i += 1
   #normalize the pitchs
@@ -55,10 +39,13 @@ def make_note_num_dicts(seen_notes):
   num_to_pitch = dict(zip( pitch_to_num_dict.values(), pitch_to_num_dict.keys()))
   return pitch_to_num_dict ,  num_to_pitch
 def normalize_notes(songs):
-  #THIS FUNCTION NEEDS WORK
-  global n_gaps
-  global n_lengths
-  global n_volume
+  '''
+  params:
+    songs: dict of in the form of { {gaps:[3,..5] , lengths:[.1 , ... .05] , pitch:['E4',...'A3'],volume:[40,...90]}  }
+            where each item in songs is dict representing a songs data
+  returns: same dict but each value is a number between 1 and 0
+  '''
+  global num_to_pitch
   combined_pitchs = []
   combined_gaps = []
   combined_lengths = []
@@ -72,29 +59,17 @@ def normalize_notes(songs):
         combined_lengths.append(length)
       for volume in song['volume']:
         combined_volume.append(volume)
-  
-  # maybe pitch/chords should be held as a category instead of number???
-  total_notes = 0
-  total_chords = 0
   unique_pitchs = sorted(set(item for item in combined_pitchs))
-
-  
-
   pitch_to_num , num_to_pitch = make_note_num_dicts(seen_notes=unique_pitchs)
-  n_gaps = float(len(set(combined_gaps)))
-  n_lengths = float(len(set(combined_lengths)))
-  n_volume = float(len(set(combined_volume)))
-
 
   #normalize notes here
   songs_normailized_notes = []# 2d list of songs and dict notes in the song
   for song in songs:
-    notes_in_song = {'gaps':[],'lengths':[] , 'pitch':[],'octave':[]}
     for index in range(0,len(song['gaps'])):
-      song['gaps'][index] /= n_gaps
-      song['lengths'][index] /= n_lengths
+      song['gaps'][index] /= max(combined_gaps)
+      song['lengths'][index] /= max(combined_lengths)
       song['pitch'][index] = pitch_to_num[song['pitch'][index]]#match the pitch lettter to a normalized number
-      song['volume'][index] /= n_volume
+      song['volume'][index] /= max(combined_volume)
   return songs , pitch_to_num , num_to_pitch
 def midi_path_to_data(midi_path):
     try:
@@ -133,6 +108,7 @@ def midi_path_to_data(midi_path):
 
         # add 'gap' from last note 
         offset_from_last_note = totalOffset - lastOffset
+        print(offset_from_last_note)
         note_gaps.append(offset_from_last_note)
         lastOffset = totalOffset
 
@@ -146,9 +122,15 @@ def midi_path_to_data(midi_path):
 
     return {'gaps':note_gaps , 'lengths':note_lengths , 'pitch':note_pitch , 'volume':note_volume}
 def prepare_song_data_for_model(songs , num_prev_notes):
-
-  global note_to_int
-  global int_to_note
+  '''
+  Parmas: 
+    Songs: dict of dicts where each dict represents notes in a song
+    num_prev_notes: the number of notes in the input
+  
+  Output: 
+    network_input: list input for the model in the shape of (#seq , num_prev_notes , num_features)
+    network_output: list ouput for each sequennce/time step in the shape of (#seq , num_features)
+  '''
   songs, note_to_int , int_to_note = normalize_notes(songs)
   network_input = []
   network_output = []
@@ -185,3 +167,61 @@ def list_instruments(midi):
         if type(n) != music.chord.Chord:
           print("Note: %s %d %0.1f" % (n.pitch.name, n.pitch.octave, n.duration.quarterLength))
 
+def round_pitch(pitch_num , real_pitch_nums):
+  closest = real_pitch_nums[0]
+  for pitch_key in real_pitch_nums:
+    if abs(pitch_num - closest) > abs(pitch_num - pitch_key):
+      closest = pitch_key
+  return closest
+def predictions_to_music(notes , unnormalized_data ):
+  '''
+  params:
+    notes: 2d list of notes outputted from the model, each note should be in the form [gap from last note , note length , pitch , volume]
+          with eac h value being between 1 and 0
+    unnormalized data: data before the normalization, used so we can get our normalized predictions back to the real output
+    num_to_pitch: dict in the form of {.01: C1 ... , 1:G8}
+  '''
+
+  #'unormalize' notes
+  combined_gaps = []
+  combined_lengths = []
+  combined_volume = []
+  for song in unnormalized_data:
+      for gap in song['gaps']:
+        combined_gaps.append(gap)
+      for length in song['lengths']:
+        combined_lengths.append(length)
+      for volume in song['volume']:
+        combined_volume.append(volume)
+  max_gap = max(combined_gaps)
+  max_length = max(combined_lengths)
+  max_volume = max(combined_volume)
+  readable_notes = []
+  for note in notes:
+    note = note[0]
+    gap = note[0] * max_gap
+    length = note[1] * max_length
+    pitch = num_to_pitch[round_pitch(note[2] , list(num_to_pitch.keys()))]
+    volume = note[3] * max_volume
+    readable_notes.append([gap , length , pitch , volume])
+
+  #combine the notes into a music21 stream  
+  offset = 0
+  output_notes = []
+  for note in readable_notes:
+      print(note)
+      gap = note[0]
+      offset += gap
+      length = note[1]
+      pitch = note[2]
+      volume = note[3]
+      new_note = music.note.Note(pitch) #storing it in the object
+      new_note.offset = offset #connecting it to our offset command later on
+      new_note.storedInstrument = music.instrument.Piano() #playing it with piano
+      new_note.volume.velocity = volume
+      output_notes.append(new_note) #adding it to the song
+  print(len(output_notes))
+  print(offset)
+  s = music.stream.Stream(output_notes)
+  mf = s.write('midi', fp="data/testOutput.mid")
+  s.show('midi')
