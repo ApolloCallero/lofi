@@ -1,5 +1,7 @@
 
-a) fix normalize_notes function
-b) add bunch of visualiztions of data
-c) do some matrix profiling and add visuilization https://matrixprofile.org/libraries/
-d) finish funnctions that transform our output sequernces into music 
+a) LSTM not working so try TimeSeries generator
+b) genre selector!
+c) add bunch of visualiztions of data
+d) do some matrix profiling and add visuilization https://matrixprofile.org/libraries/
+e) finish funnctions that transform our output sequernces into music 
+f) should we split notes instruments or not??? run 2 tests to see

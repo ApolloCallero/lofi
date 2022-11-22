@@ -2,19 +2,7 @@
 import music21 as music
 import os
 
-def get_midi_filepaths():
-    lofi_paths = ['data']
-    midi_paths = []
-    
-    for path in lofi_paths:
-      for root, dirs, files in os.walk(path):
-          # select file name
-          for file in files:
-              # check the extension of files
-              if file.endswith('.mid'):
-                  # print whole path of files
-                  midi_paths.append(os.path.join(root, file))
-    return midi_paths
+
 
 
 
@@ -28,7 +16,7 @@ def make_note_num_dicts(seen_notes):
   octaves = 8
   pitch_to_num_dict = {}
   i = 0
-  for octave in range(1,octaves+1):
+  for octave in range(0,octaves+1):
     for note in notes:
       for note_type in ["-" , "","#"]:
           pitch_to_num_dict[note + note_type + str(octave)] = i
@@ -57,8 +45,6 @@ def normalize_notes(songs):
         combined_gaps.append(gap)
       for length in song['lengths']:
         combined_lengths.append(length)
-      for volume in song['volume']:
-        combined_volume.append(volume)
   unique_pitchs = sorted(set(item for item in combined_pitchs))
   pitch_to_num , num_to_pitch = make_note_num_dicts(seen_notes=unique_pitchs)
 
@@ -69,38 +55,45 @@ def normalize_notes(songs):
       song['gaps'][index] /= max(combined_gaps)
       song['lengths'][index] /= max(combined_lengths)
       song['pitch'][index] = pitch_to_num[song['pitch'][index]]#match the pitch lettter to a normalized number
-      song['volume'][index] /= max(combined_volume)
   return songs , pitch_to_num , num_to_pitch
-def midi_path_to_data(midi_path):
-    try:
-      midi = music.converter.parse(midi_path)
-    except:
-      print('Unable to read ' , midi_path)
-      return None 
-    notes_to_parse = midi.flat.notes
+def midi_path_to_data(midi_path , split_instruments):
+  '''
+  TBD: split 'instruments' or not?'
+  '''
+  try:
+    midi = music.converter.parse(midi_path)
+  except:
+    print('Unable to read ' , midi_path)
+    return None 
+  notes_to_parse = midi.flat.notes
 
     
+
+
+  if split_instruments == False:
+    parts_dicts = []
+    #for part in midi.parts:
     note_gaps = []#1d list of time offsets/'gaps' between notes
     note_lengths = []
-    note_pitch = []
+    note_pitchs = []
     note_volume = []
     lastOffset = 0
     for note in midi.flat.notes:
         #add pitch for this note
         if isinstance(note, music.note.Note): #if it's a single note, we don't have to join it to any other notes in the series
-            note_pitch.append(str(note.pitch))
+            note_pitchs.append(str(note.pitch))
         elif isinstance(note, music.chord.Chord): #split each note in a chord and have them be it's on 'step' in the time series just with no time between them
             for note_in_chord in note.notes:
-              note_pitch.append(str(note_in_chord.pitch))
+              note_pitchs.append(str(note_in_chord.pitch))
               note_gaps.append(0)
               note_lengths.append(note_in_chord.quarterLength)
-              note_volume.append(note_in_chord.volume.velocity)
+              note_volume.append(note_in_chord.volume.velocityScalar)
             continue
         
         if note_gaps == []:
             note_gaps = [0]
             note_lengths.append(float(note.quarterLength))
-            note_volume.append(note.volume.velocity)
+            note_volume.append(note.volume.velocityScalar)
             continue
     
         #offset/gap from start
@@ -108,7 +101,6 @@ def midi_path_to_data(midi_path):
 
         # add 'gap' from last note 
         offset_from_last_note = totalOffset - lastOffset
-        print(offset_from_last_note)
         note_gaps.append(offset_from_last_note)
         lastOffset = totalOffset
 
@@ -116,11 +108,53 @@ def midi_path_to_data(midi_path):
         note_lengths.append(float(note.quarterLength))
         
         #add note volume
-        note_volume.append(note.volume.velocity)
+        note_volume.append(note.volume.velocityScalar)
+    return [{'gaps':note_gaps , 'lengths':note_lengths , 'pitch':note_pitchs , 'volume':note_volume}]
+  else:
+    parts_dicts = []
+    #for part in midi.parts:
+    note_gaps = []#1d list of time offsets/'gaps' between notes
+    note_lengths = []
+    note_pitchs = []
+    note_volume = []
+    lastOffset = 0
+    for note in midi.flat.notes:
+        #add pitch for this note
+        if isinstance(note, music.note.Note): #if it's a single note, we don't have to join it to any other notes in the series
+            note_pitchs.append(str(note.pitch))
+        elif isinstance(note, music.chord.Chord): #split each note in a chord and have them be it's on 'step' in the time series just with no time between them
+            for note_in_chord in note.notes:
+              note_pitchs.append(str(note_in_chord.pitch))
+              note_gaps.append(0)
+              note_lengths.append(note_in_chord.quarterLength)
+              note_volume.append(note_in_chord.volume.velocityScalar)
+            continue
+        
+        if note_gaps == []:
+            note_gaps = [0]
+            note_lengths.append(float(note.quarterLength))
+            note_volume.append(note.volume.velocityScalar)
+            continue
+    
+        #offset/gap from start
+        totalOffset = note.getOffsetInHierarchy(midi)
 
+        # add 'gap' from last note 
+        offset_from_last_note = totalOffset - lastOffset
+        note_gaps.append(offset_from_last_note)
+        lastOffset = totalOffset
 
+        #add 'note length'
+        note_lengths.append(float(note.quarterLength))
+        
+        #add note volume
+        note_volume.append(note.volume.velocityScalar)
 
-    return {'gaps':note_gaps , 'lengths':note_lengths , 'pitch':note_pitch , 'volume':note_volume}
+    #a lot of parts in non-lofi songs have one note only, drop it here if thats that case
+    for note in note_pitchs:
+      if note != note[0]:
+        parts_dicts.append({'gaps':note_gaps , 'lengths':note_lengths , 'pitch':note_pitchs , 'volume':note_volume})
+  return parts_dicts
 def prepare_song_data_for_model(songs , num_prev_notes):
   '''
   Parmas: 
@@ -150,7 +184,7 @@ def prepare_song_data_for_model(songs , num_prev_notes):
         step_input = list(zip(prev_gaps , prev_lengths , prev_pitch , prev_volume))
 
         #output is [gap from last note , note length , pitch , velocity]
-        curr_note_data = [song['gaps'][note_num], song['lengths'][note_num], song['pitch'][note_num] , song['pitch'][note_num]]
+        curr_note_data = [song['gaps'][note_num], song['lengths'][note_num], song['pitch'][note_num] , song['volume'][note_num]]
 
 
         network_input.append(step_input)
@@ -191,20 +225,18 @@ def predictions_to_music(notes , unnormalized_data ):
         combined_gaps.append(gap)
       for length in song['lengths']:
         combined_lengths.append(length)
-      for volume in song['volume']:
-        combined_volume.append(volume)
+
   max_gap = max(combined_gaps)
   max_length = max(combined_lengths)
-  max_volume = max(combined_volume)
   readable_notes = []
+  print('final output: ')
   for note in notes:
     note = note[0]
     gap = note[0] * max_gap
     length = note[1] * max_length
     pitch = num_to_pitch[round_pitch(note[2] , list(num_to_pitch.keys()))]
-    volume = note[3] * max_volume
+    volume = note[3] * 127
     readable_notes.append([gap , length , pitch , volume])
-
   #combine the notes into a music21 stream  
   offset = 0
   output_notes = []
@@ -219,6 +251,7 @@ def predictions_to_music(notes , unnormalized_data ):
       new_note.offset = offset #connecting it to our offset command later on
       new_note.storedInstrument = music.instrument.Piano() #playing it with piano
       new_note.volume.velocity = volume
+      new_note.quarterLength = length
       output_notes.append(new_note) #adding it to the song
   print(len(output_notes))
   print(offset)
