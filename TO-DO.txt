@@ -1,7 +1,8 @@
 
-a) LSTM not working so try TimeSeries generator
 b) genre selector!
 c) add bunch of visualiztions of data
 d) do some matrix profiling and add visuilization https://matrixprofile.org/libraries/
 e) finish funnctions that transform our output sequernces into music 
 f) should we split notes instruments or not??? run 2 tests to see
+g) very little correaltion between each of the features, maybe make 4 different models??
+h)maybe drop volume??
