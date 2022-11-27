@@ -35,21 +35,22 @@ def lstm2(network_input , network_output):
     #bad rn
     model = Sequential()
     model.add(LSTM(
-        256,
+        512,
         input_shape=(network_input.shape[1], network_input.shape[2]),
         return_sequences=True
     ))
-    model.add(Dropout(0.3))
-    model.add(LSTM(512, return_sequences=True))
-    model.add(Dropout(0.3))
-    model.add(LSTM(256))
     model.add(Dense(256))
-    model.add(Dropout(0.3))
+    model.add(Dense(256))
+    model.add(LSTM(512, return_sequences=True))
+    model.add(Dense(256))
+    model.add(LSTM(512))
     model.add(Dense(4 , 'linear'))
-    model.add(Activation('softmax'))
-    model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer='rmsprop')
-    model.fit(network_input, network_output, epochs=8 , batch_size=64)
+    #model.add(Dense(4))
+    #model.add(Activation('softmax'))
+    model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer='rmsprop', metrics=['accuracy'])
+    model.fit(network_input, network_output,batch_size=64, epochs=8)
     return model
+
 def lstm3(network_input, network_output):
     model1 = Sequential()
     model1.add(tf.keras.layers.InputLayer((8, 4)))
@@ -59,6 +60,26 @@ def lstm3(network_input, network_output):
     model1.fit(network_input, network_output, epochs=40)
     #print(model1.summuary())
     return model1
+
+
+def lstm4(network_input , network_output):
+    model = Sequential()
+    model.add(LSTM(
+        512,
+        input_shape=(network_input.shape[1], network_input.shape[2]),
+        return_sequences=True
+    ))
+    model.add(Dense(256))
+    model.add(Dense(256))
+    model.add(LSTM(512, return_sequences=True))
+    model.add(Dense(256))
+    model.add(LSTM(512))
+    model.add(Dense(4))
+    #model.add(Dense(4))
+    #model.add(Activation('softmax'))
+    model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer='rmsprop', metrics=['accuracy'])
+    model.fit(network_input, network_output,batch_size=64, epochs=8)
+    return model
 def predict_notes(network_input , model , num_prev_notes):
     '''
     params:
@@ -91,24 +112,30 @@ def predict_notes(network_input , model , num_prev_notes):
         #print(note)
     return prediction_output
 
-#get midi data
-files = get_midi_filepaths()
-print(len(files) , 'number of songs shown to model')
-songs = []
-for midi_path in files:
-    instrument_data = midi_path_to_data(midi_path)
-    if instrument_data !=  None:
-        songs += midi_path_to_data(midi_path)
+def main():
 
-#format and normalize midi data
-input , output = prepare_song_data_for_model(songs , 8)
-model = lstm3(np.array(input) , np.array(output))
-ml_notes = predict_notes(input , model , 8)
 
-songs = []
-for midi_path in files:
-    instrument_data = midi_path_to_data(midi_path)
-    if instrument_data !=  None:
-        songs += midi_path_to_data(midi_path)
-predictions_to_music(ml_notes , songs)
+    #get midi data
+    files = get_midi_filepaths()
+    songs = []
+    for midi_path in files:
+        instrument_data = midi_path_to_data(midi_path , split_instruments=False)
+        if instrument_data !=  None:
+            songs += instrument_data
+            if len(songs) % 50 == 0:
+                print(len(songs) , " proccessed")
+            if len(songs) ==  300:
+                break
+    #format and normalize midi data
+    input , output = prepare_song_data_for_model(songs , 8)
+    model = lstm4(np.array(input) , np.array(output))
+    ml_notes = predict_notes(input , model , 8)
 
+    songs = []
+    for midi_path in files:
+        instrument_data = midi_path_to_data(midi_path , split_instruments=False)
+        if instrument_data !=  None:
+            songs += instrument_data
+    predictions_to_music(ml_notes , songs)
+
+main()

@@ -16,7 +16,7 @@ def make_note_num_dicts(seen_notes):
   octaves = 8
   pitch_to_num_dict = {}
   i = 0
-  for octave in range(0,octaves+1):
+  for octave in range(-1,octaves+1):
     for note in notes:
       for note_type in ["-" , "","#"]:
           pitch_to_num_dict[note + note_type + str(octave)] = i
@@ -38,7 +38,10 @@ def normalize_notes(songs):
   combined_gaps = []
   combined_lengths = []
   combined_volume = []
+  count = 0
   for song in songs:
+      count += 1
+      print(count)
       for note in song['pitch']:
           combined_pitchs.append(note)
       for gap in song['gaps']:
@@ -50,10 +53,14 @@ def normalize_notes(songs):
 
   #normalize notes here
   songs_normailized_notes = []# 2d list of songs and dict notes in the song
+  max_gap = max(combined_gaps)
+  max_length = max(combined_lengths)
   for song in songs:
-    for index in range(0,len(song['gaps'])):
-      song['gaps'][index] /= max(combined_gaps)
-      song['lengths'][index] /= max(combined_lengths)
+    count -= 1
+    print(count)
+    for index in range(0,len(song['pitch'])):
+      song['gaps'][index] /= max_gap
+      song['lengths'][index] /= max_length
       song['pitch'][index] = pitch_to_num[song['pitch'][index]]#match the pitch lettter to a normalized number
   return songs , pitch_to_num , num_to_pitch
 def midi_path_to_data(midi_path , split_instruments):
@@ -170,8 +177,12 @@ def prepare_song_data_for_model(songs , num_prev_notes):
   network_output = []
 
   # create input sequences and the corresponding outputs
+  count = 0
+  print(songs)
   for song in songs:
-    for note_num in range(num_prev_notes, len(song['gaps']), 1):
+    count += 1
+    print(count)
+    for note_num in range(num_prev_notes, len(song['pitch'])):
 
 
         #sequence_in = song[note_num - sequence_length:note_num]#notes before
