@@ -35,15 +35,17 @@ def make_genre_dir(new_dir_name , genres_to_include):
                     if genre in song_info["genres"]:
                         #get midi file path
                         #file = 'xml/a/artist/song/song_info.json'
-                        sub_dirs = file.split('/')
+                        sub_dirs = (root + '/' + file).split('/')
                         print(sub_dirs)
                         for index , sub_dir in enumerate(sub_dirs):
                             if sub_dir == 'xml':
+                                sub_path_to_dir_to_add = '/'.join(sub_dirs[index + 1:-1])#/a/artist/song
+                                print(sub_path_to_dir_to_add)
+                                src = 'data/hook_theory/pianoroll' + '/' + sub_path_to_dir_to_add
+                                try:
+                                    shutil.copytree(src , new_dir_name + '/' + sub_path_to_dir_to_add )#src, dest
+                                except:
+                                    continue
                                 print('copied!')
-                                sub_path_to_dir_to_add = sub_dirs[index + 1:-1].join('/')#/a/artist/song
-                                dir_to_add = 'data/hook_theory/piano_roll' + sub_path_to_dir_to_add
-
-                                shutil.copyfile(file , new_dir_name + dir_to_add)
-                                
 
 make_genre_dir('data/hip-hop' , ["Hip-Hop/Rap"])
