@@ -13,7 +13,7 @@ def make_note_num_dicts(seen_notes):
   '''    
 
   notes = ["C" , "D" , "E" , "F" , "G" , "A","B"]
-  octaves = 8
+  octaves = 9
   pitch_to_num_dict = {}
   i = 0
   for octave in range(-1,octaves+1):
@@ -41,7 +41,6 @@ def normalize_notes(songs):
   count = 0
   for song in songs:
       count += 1
-      print(count)
       for note in song['pitch']:
           combined_pitchs.append(note)
       for gap in song['gaps']:
@@ -57,7 +56,6 @@ def normalize_notes(songs):
   max_length = max(combined_lengths)
   for song in songs:
     count -= 1
-    print(count)
     for index in range(0,len(song['pitch'])):
       song['gaps'][index] /= max_gap
       song['lengths'][index] /= max_length
@@ -178,7 +176,6 @@ def prepare_song_data_for_model(songs , num_prev_notes):
 
   # create input sequences and the corresponding outputs
   count = 0
-  print(songs)
   for song in songs:
     count += 1
     print(count)
@@ -218,7 +215,7 @@ def round_pitch(pitch_num , real_pitch_nums):
     if abs(pitch_num - closest) > abs(pitch_num - pitch_key):
       closest = pitch_key
   return closest
-def predictions_to_music(notes , unnormalized_data ):
+def predictions_to_music(notes , unnormalized_dat ):
   '''
   params:
     notes: 2d list of notes outputted from the model, each note should be in the form [gap from last note , note length , pitch , volume]
@@ -263,6 +260,53 @@ def predictions_to_music(notes , unnormalized_data ):
       new_note.storedInstrument = music.instrument.Piano() #playing it with piano
       new_note.volume.velocity = volume
       new_note.quarterLength = length
+      output_notes.append(new_note) #adding it to the song
+  print(len(output_notes))
+  print(offset)
+  s = music.stream.Stream(output_notes)
+  mf = s.write('midi', fp="data/testOutput.mid")
+  s.show('midi')
+def predictions_to_music_seperate_models(pitchs ,gaps, unnormalized_data , notes_to_generate=100):
+  '''
+  params:
+    notes: 2d list of notes outputted from the model, each note should be in the form [gap from last note , note length , pitch , volume]
+          with eac h value being between 1 and 0
+    unnormalized data: data before the normalization, used so we can get our normalized predictions back to the real output
+    num_to_pitch: dict in the form of {.01: C1 ... , 1:G8}
+  '''
+
+  #'unormalize' notes
+  combined_gaps = []
+  combined_lengths = []
+  combined_volume = []
+  for song in unnormalized_data:
+      for gap in song['gaps']:
+        combined_gaps.append(gap)
+      for length in song['lengths']:
+        combined_lengths.append(length)
+
+  max_gap = max(combined_gaps)
+  max_length = max(combined_lengths)
+  readable_notes = []
+  print('final output: ')
+  for i in range(0,notes_to_generate):
+    gap = gaps[i][0] * max_gap
+    #length = note[1] * max_length
+    pitch = num_to_pitch[round_pitch(pitchs[i][0]/len(list(num_to_pitch.keys()))  , list(num_to_pitch.keys()))]
+    #volume = note[3] * 127
+    readable_notes.append([gap , pitch])
+  #combine the notes into a music21 stream  
+  offset = 0
+  output_notes = []
+  for note in readable_notes:
+      gap = note[0][0]
+      offset += (gap*3)
+      pitch = note[1]
+      new_note = music.note.Note(pitch) #storing it in the object
+      new_note.offset = offset #connecting it to our offset command later on
+      new_note.storedInstrument = music.instrument.Piano() #playing it with piano
+      new_note.volume.velocity = 80
+      #new_note.quarterLength = .5#length
       output_notes.append(new_note) #adding it to the song
   print(len(output_notes))
   print(offset)
