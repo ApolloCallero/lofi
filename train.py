@@ -3,7 +3,8 @@ import pickle
 import numpy as np
 import pandas as pd
 import music21 as music
-from keras.models import Sequential
+# MLP for Pima Indians Dataset Serialize to JSON and HDF5
+from keras.models import Sequential , model_from_json
 from keras.layers import Dense
 from keras.layers import Dropout
 from keras.layers import LSTM, Bidirectional
@@ -17,6 +18,8 @@ import os
 import pickle
 from midi_proccessing import *
 from genre_selector import *
+from tensorflow import keras
+from keras import layers
 
 
 def lstm(network_input , network_output):
@@ -117,6 +120,7 @@ def predict_notes_seperate_models(pitch_input , pitch_model,gap_input,gap_model 
         model: trained lstm mode;
         num_prev_notes: int of the number of previous notes the model considered
     '''
+    global pitch_to_num , num_to_pitch , gap_to_num , num_to_gap
     #pick the first n notes from a random song generate the next note and add it to the prev notes to pull data from
     start_note_index = np.random.randint(0, len(pitch_input)-1)
     #int_to_note = dict((number, note) for number, note in enumerate(pitchnames))
@@ -125,19 +129,23 @@ def predict_notes_seperate_models(pitch_input , pitch_model,gap_input,gap_model 
     prev_pitchs = pitch_input[start_note_index]
     predicted_pitchs = []
 
-    pitch_to_num_dict ,  num_to_pitch = make_note_num_dicts(None)
+    #get unique gaps
+
+    #pitch_to_num_dict ,  num_to_pitch , gap_to_num , num_to_gap = make_note_num_dicts(None , unique_gaps)
     #generate 100 pitchs
     for note_index in range(100): 
 
         #get a num_pitch_long list with the likelyness each note is going to be played
         prediction_input = np.reshape(prev_pitchs[start - num_prev_notes:start], (1, num_prev_notes, 1))
         prediction = pitch_model.predict(prediction_input, verbose = 0)[0]
-
+        
         #choose a pitch randomly from the top 3 note pitchs 
         top_likely = np.argpartition(prediction, -3)[-3:]
+        #if [[np.argpartition(prediction, -1)[-1:]]] != 
+        print(note_index,top_likely)
         index = np.random.choice(top_likely, 1)[0]
         predicted_pitchs.append(num_to_pitch[index /len(list(num_to_pitch.values()))])
-        prev_pitchs = np.concatenate((prev_pitchs , [[index]]) , axis = 0)
+        prev_pitchs = np.concatenate((prev_pitchs , [[index / len(list(num_to_pitch.values()))]]) , axis = 0)
         start += 1
     #generate 100 gaps 
     prev_gaps = gap_input[start_note_index]
@@ -145,14 +153,20 @@ def predict_notes_seperate_models(pitch_input , pitch_model,gap_input,gap_model 
     start = num_prev_notes
     for note_index in range(100): #here, we're generating 100 notes
         prediction_input = np.reshape(prev_gaps[start - num_prev_notes:start], (1, num_prev_notes, 1))
-        prediction = gap_model.predict(prediction_input, verbose = 0)
-        predicted_gaps.append(prediction)
-        prev_gaps = np.concatenate((prev_gaps , prediction) , axis = 0)
+        #print('gap input ' , prediction_input)
+        predictions = gap_model.predict(prediction_input, verbose = 0)[0]
+        top_likely = np.argpartition(predictions, -2)[-2:]
+        print(note_index,top_likely)
+        index = np.random.choice(top_likely, 1)[0]
+        predicted_gaps.append(num_to_gap[index])
+        prev_gaps = np.concatenate((prev_gaps , [[index]]) , axis = 0)
         start += 1
+    print(prev_pitchs , prev_gaps)
     print(predicted_pitchs , predicted_gaps )
-    return prev_pitchs[-100:] , predicted_gaps[-100:]
+    return predicted_pitchs[-100:] , predicted_gaps[-100:]
 
 def sepearate_models_train(input_data , output_data):
+    global pitch_to_num , num_to_pitch , gap_to_num , num_to_gap
     '''
     params:
     input data: n by sequence_length by 4 list where each list is in the form of [gap,length,pitch,volume]
@@ -161,7 +175,6 @@ def sepearate_models_train(input_data , output_data):
         length_model: model trained on just the lengths of each note
         pitch_model: model trained on the pitchs of each note
     '''
-    num_pitch = len(list(make_note_num_dicts(None)[0].values()))
     #get data split by each of the 3 features
     gap_input = []
     length_input = []
@@ -188,13 +201,24 @@ def sepearate_models_train(input_data , output_data):
         
 
     #make the model to predict the gap between notes
+
+    num_unique_gaps = len(set(gap_output))
+    #pitch_to_num_dict ,  num_to_pitch , num_to_gap , gap_to_num = make_note_num_dicts(None , set([round(i,3) for i in gap_output]))
+    num_pitch = len(pitch_to_num.values())
+    num_unique_gaps = len(num_to_gap.values())
     gap_input = np.array(gap_input)
     gap_output = np.array(gap_output)
+    
+    gap_output = np_utils.to_categorical(gap_output , num_classes=num_unique_gaps )
     gap_model = Sequential()
-    gap_model.add(LSTM(256, input_shape=(gap_input.shape[1], gap_input.shape[2])))
-    gap_model.add(Dense(1))
-    gap_model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer='Adam' , metrics=['accuracy'])
-
+    gap_model.add(LSTM(256, input_shape=(gap_input.shape[1], gap_input.shape[2]), return_sequences=True) )
+    gap_model.add(Dense(128))
+    gap_model.add(Dense(256))
+    gap_model.add(LSTM(256, input_shape=(gap_input.shape[1], gap_input.shape[2]), return_sequences=False) )
+    gap_model.add(Dense(num_unique_gaps))
+    gap_model.add(Dense(num_unique_gaps))
+    gap_model.add(Activation('softmax'))
+    gap_model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
     gap_model.fit(gap_input, gap_output, epochs=8, batch_size=64)
     
     #format then make then pitch model
@@ -204,10 +228,10 @@ def sepearate_models_train(input_data , output_data):
     pitch_output = np_utils.to_categorical(pitch_output , num_classes=num_pitch )
     pitch_model = Sequential()
     pitch_model.add(LSTM(512,return_sequences=True ))
+    pitch_model.add(Dense(128))
     pitch_model.add(Dense(256))
-    pitch_model.add(Dense(256))
-    pitch_model.add(LSTM(512, return_sequences=True))
-    pitch_model.add(Dense(256))
+    pitch_model.add(LSTM(512, return_sequences=True ))
+    pitch_model.add(Dense(200))
     pitch_model.add(LSTM(512 , return_sequences=False))
     pitch_model.add(Dense(num_pitch))
     pitch_model.add(Dense(num_pitch))
@@ -215,10 +239,19 @@ def sepearate_models_train(input_data , output_data):
     pitch_model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
     #gap_model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer='rmsprop', metrics=['accuracy'])
     pitch_model.fit(pitch_input,pitch_output,batch_size=64, epochs=8)
-    
+
+    #save models
+    pitch_model_json = pitch_model.to_json()
+    gap_model_json = gap_model.to_json()
+    with open("pitch_model.json", "w") as json_file:
+        json_file.write(pitch_model_json)
+    with open("gap_model.json", "w") as json_file:
+        json_file.write(gap_model_json)
+    pitch_model.save_weights("data/pitch_model.h5")
+    gap_model.save_weights("data/gap_model.h5")
     return pitch_input , pitch_model , gap_input , gap_model
     
-    
+
 def main():
     #get midi data
     files = get_midi_filepaths()
@@ -247,7 +280,38 @@ def main():
             songs += instrument_data
     predictions_to_music(ml_notes , songs)
 
+
+def transformer_encoder(inputs, head_size, num_heads, ff_dim, dropout=0):
+    # Normalization and Attention
+    x = layers.LayerNormalization(epsilon=1e-6)(inputs)
+    x = layers.MultiHeadAttention(
+        key_dim=head_size, num_heads=num_heads, dropout=dropout
+    )(x, x)
+    x = layers.Dropout(dropout)(x)
+    res = x + inputs
+
+    # Feed Forward Part
+    x = layers.LayerNormalization(epsilon=1e-6)(res)
+    x = layers.Conv1D(filters=ff_dim, kernel_size=1, activation="relu")(x)
+    x = layers.Dropout(dropout)(x)
+    x = layers.Conv1D(filters=inputs.shape[-1], kernel_size=1)(x)
+    return x + res
+
+def build_model(n_classes,input_shape,head_size,num_heads,ff_dim,num_transformer_blocks,mlp_units,dropout=0,mlp_dropout=0):
+    inputs = keras.Input(shape=input_shape)
+    x = inputs
+    for _ in range(num_transformer_blocks):
+        x = transformer_encoder(x, head_size, num_heads, ff_dim, dropout)
+
+    x = layers.GlobalAveragePooling1D(data_format="channels_first")(x)
+    for dim in mlp_units:
+        x = layers.Dense(dim, activation="relu")(x)
+        x = layers.Dropout(mlp_dropout)(x)
+    outputs = layers.Dense(n_classes, activation="softmax")(x)
+    return keras.Model(inputs, outputs)
+
 def seperate_models_main():
+    global pitch_to_num , num_to_pitch , gap_to_num , num_to_gap
     #get midi data
     files = get_midi_filepaths()
     songs = []
@@ -255,14 +319,24 @@ def seperate_models_main():
         instrument_data = midi_path_to_data(midi_path , split_instruments=False)
         if instrument_data !=  None:
             songs += instrument_data
-            if len(songs) % 50 == 0:
-                print(len(songs) , " proccessed")
-
-
+        notes = [len(i['pitch']) for i in songs]
+        if sum(notes) > 1000:
+            print('num songs',len(songs))
+            break
+        #if sum(notes) % 7000 == 0:
+        #    print(notes)
+        if len(songs) == 200:
+            break
+    
     #format and normalize midi data
-    input , output = prepare_song_data_for_model(songs , 12)
+    input , output , pitch_to_num , num_to_pitch , gap_to_num , num_to_gap = prepare_song_data_for_model(songs , 10)
+    pitch_input , pitch_output = split_features(input , output)
+    return 
+    print('input shape: ',np.array(input).shape)
+    print('output shape: ',np.array(output).shape)
+
     pitch_input , pitch_model , gap_input , gap_model = sepearate_models_train(input , output)
-    pred_pitchs , pred_gaps = predict_notes_seperate_models(pitch_input , pitch_model,gap_input , gap_model,12)
+    pred_pitchs , pred_gaps = predict_notes_seperate_models(pitch_input , pitch_model,gap_input , gap_model,10)
 
     #unnormalize predictions and transform it to music
     songs = []
@@ -270,6 +344,7 @@ def seperate_models_main():
         instrument_data = midi_path_to_data(midi_path , split_instruments=False)
         if instrument_data !=  None:
             songs += instrument_data
+        
     predictions_to_music_seperate_models(pred_pitchs , pred_gaps , songs)
 #main()
 seperate_models_main()

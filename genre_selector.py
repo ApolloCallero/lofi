@@ -3,7 +3,7 @@ import shutil
 import json
 def get_midi_filepaths():
     #add ~130 lofi midi files from non-hook theory datasets
-    lofi_paths = ['data/lofi midis/LOFI PIANO MIDI FILES','data/hand_picked']#'data/lofi midis/lofi_from_others']
+    lofi_paths = ['data/lofi midis/LOFI PIANO MIDI FILES','data/lofi midis/lofi_from_others','data/hip-hop', 'data/classical' ]#,'data/lofi midis/lofi_from_others']
     midi_paths = []
     for path in lofi_paths:
       for root, dirs, files in os.walk(path):
@@ -48,4 +48,4 @@ def make_genre_dir(new_dir_name , genres_to_include):
                                     continue
                                 print('copied!')
 
-make_genre_dir('data/hip-hop' , ["Hip-Hop/Rap"])
+#make_genre_dir('data/classical' , ["Classical"])
